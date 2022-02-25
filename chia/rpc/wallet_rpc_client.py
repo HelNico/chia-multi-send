@@ -165,21 +165,24 @@ class WalletRpcClient(RpcClient):
     ) -> TransactionRecord:
         # Converts bytes to hex for puzzle hashes
         additions_hex = []
+        print(additions)
         for ad in additions:
             additions_hex.append({"amount": ad["amount"], "puzzle_hash": ad["puzzle_hash"].hex()})
             if "memos" in ad:
                 additions_hex[-1]["memos"] = ad["memos"]
         if coins is not None and len(coins) > 0:
+            print("test1")
             coins_json = [c.to_json_dict() for c in coins]
             response: Dict = await self.fetch(
                 "send_transaction_multi",
                 {"wallet_id": wallet_id, "additions": additions_hex, "coins": coins_json, "fee": fee},
             )
         else:
+            print(wallet_id, additions_hex, fee)
             response = await self.fetch(
                 "send_transaction_multi", {"wallet_id": wallet_id, "additions": additions_hex, "fee": fee}
             )
-
+        print(response)
         return TransactionRecord.from_json_dict_convenience(response["transaction"])
 
     async def delete_unconfirmed_transactions(self, wallet_id: str) -> None:

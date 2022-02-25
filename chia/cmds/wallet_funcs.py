@@ -89,12 +89,18 @@ def check_unusual_transaction(amount: Decimal, fee: Decimal):
     return fee >= amount
 
 
-async def send(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
+async def send_multi(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
 
     wallet_id = args["id"]
     amount = Decimal(args["amount"])
     fee = Decimal(args["fee"])
-    address = args["address"]
+    additions = []
+    for address in args["address"]:
+        temp = {}
+        temp["puzzle_hash"] = bytes.fromhex(address)
+        temp["amount"] = args["amount"]
+        additions.append(temp)
+    print(additions)
     override = args["override"]
     memo = args["memo"]
     if memo is None:
@@ -118,15 +124,10 @@ async def send(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> 
             if typ == WalletType.STANDARD_WALLET:
                 final_amount = uint64(int(amount * units["chia"]))
                 print("Submitting transaction...")
-                res = await wallet_client.send_transaction(wallet_id, final_amount, address, final_fee, memos)
-                break
-            elif typ == WalletType.COLOURED_COIN:
-                final_amount = uint64(int(amount * units["colouredcoin"]))
-                print("Submitting transaction...")
-                res = await wallet_client.cat_spend(wallet_id, final_amount, address, final_fee, memos)
+                res = await wallet_client.send_transaction_multi(wallet_id, additions, None , final_fee)
                 break
             else:
-                print("Only standard wallet and CAT wallets are supported")
+                print("Only standard wallet supported for multi sends")
                 return
     if final_amount is None:
         print(f"Wallet id: {wallet_id} not found.")
@@ -144,6 +145,57 @@ async def send(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> 
     print("Transaction not yet submitted to nodes")
     print(f"Do 'chia wallet get_transaction -f {fingerprint} -tx 0x{tx_id}' to get status")
 
+async def send(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
+    wallet_id: int = args["id"]
+    amount = Decimal(args["amount"])
+    fee = Decimal(args["fee"])
+    address = args["address"]
+    override = args["override"]
+    memo = args["memo"]
+    if memo is None:
+        memos = None
+    else:
+        memos = [memo]
+
+    if not override and check_unusual_transaction(amount, fee):
+        print(
+            f"A transaction of amount {amount} and fee {fee} is unusual.\n"
+            f"Pass in --override if you are sure you mean to do this."
+        )
+        return
+
+    try:
+        typ = await get_wallet_type(wallet_id=wallet_id, wallet_client=wallet_client)
+    except LookupError:
+        print(f"Wallet id: {wallet_id} not found.")
+        return
+
+    final_fee = uint64(int(fee * units["chia"]))
+    final_amount: uint64
+    if typ == WalletType.STANDARD_WALLET:
+        final_amount = uint64(int(amount * units["chia"]))
+        print("Submitting transaction...")
+        res = await wallet_client.send_transaction(str(wallet_id), final_amount, address, final_fee, memos)
+    elif typ == WalletType.CAT:
+        final_amount = uint64(int(amount * units["cat"]))
+        print("Submitting transaction...")
+        res = await wallet_client.cat_spend(str(wallet_id), final_amount, address, final_fee, memos)
+    else:
+        print("Only standard wallet and CAT wallets are supported")
+        return
+
+    tx_id = res.name
+    start = time.time()
+    while time.time() - start < 10:
+        await asyncio.sleep(0.1)
+        tx = await wallet_client.get_transaction(str(wallet_id), tx_id)
+        if len(tx.sent_to) > 0:
+            print(f"Transaction submitted to nodes: {tx.sent_to}")
+            print(f"Do chia wallet get_transaction -f {fingerprint} -tx 0x{tx_id} to get status")
+            return None
+
+    print("Transaction not yet submitted to nodes")
+    print(f"Do 'chia wallet get_transaction -f {fingerprint} -tx 0x{tx_id}' to get status")
 
 async def get_address(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
     wallet_id = args["id"]
@@ -488,3 +540,4 @@ async def execute_with_wallet(
             print(f"Exception from 'wallet' {e}")
     wallet_client.close()
     await wallet_client.await_closed()
+
