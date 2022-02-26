@@ -128,8 +128,7 @@ def send_cmd(
 )
 @click.option("-f", "--fingerprint", help="Set the fingerprint to specify which wallet to use", type=int)
 @click.option("-i", "--id", help="Id of the wallet to use", type=int, default=1, show_default=True, required=True)
-@click.option("-a", "--amount", help="How much chia to send, in Mojo per address", type=str, required=True)
-@click.option("-e", "--memo", help="Additional memo for the transaction", type=str, default=None)
+@click.option("-a", "--amount", help="How much chia to send, in XCH per address", type=str, required=True)
 @click.option(
     "-m",
     "--fee",
@@ -148,15 +147,12 @@ def send_multi_cmd(
     fingerprint: int,
     id: int,
     amount: str,
-    memo: Optional[str],
     fee: str,
     address: [str],
     override: bool,
 ) -> None:
-    addresses = address.split(",")
-    for ad in addresses:
-        ad.replace(" ","")
-    extra_params = {"id": id, "amount": amount, "memo": memo, "fee": fee, "address": addresses, "override": override}
+    addresses = address.replace(" ","").split(",")
+    extra_params = {"id": id, "amount": amount, "fee": fee, "address": addresses, "override": override}
     import asyncio
     from .wallet_funcs import execute_with_wallet, send_multi
 

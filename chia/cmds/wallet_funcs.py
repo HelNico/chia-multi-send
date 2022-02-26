@@ -11,7 +11,7 @@ import aiohttp
 from chia.cmds.units import units
 from chia.rpc.wallet_rpc_client import WalletRpcClient
 from chia.server.start_wallet import SERVICE_NAME
-from chia.util.bech32m import encode_puzzle_hash
+from chia.util.bech32m import encode_puzzle_hash, decode_puzzle_hash
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.config import load_config
 from chia.util.default_root import DEFAULT_ROOT_PATH
@@ -92,46 +92,33 @@ def check_unusual_transaction(amount: Decimal, fee: Decimal):
 async def send_multi(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
 
     wallet_id = args["id"]
-    amount = Decimal(args["amount"])
     fee = Decimal(args["fee"])
+    override = args["override"]
+    amount = Decimal(args["amount"])
     additions = []
     for address in args["address"]:
         temp = {}
-        temp["puzzle_hash"] = bytes.fromhex(address)
-        temp["amount"] = args["amount"]
+        temp["puzzle_hash"] = decode_puzzle_hash(address)
+        temp["amount"] = int(amount * units["chia"])
         additions.append(temp)
-    print(additions)
-    override = args["override"]
-    memo = args["memo"]
-    if memo is None:
-        memos = None
-    else:
-        memos = [memo]
-
-    if not override and check_unusual_transaction(amount, fee):
+    if not override and check_unusual_transaction(amount*len(additions), fee):
         print(
             f"A transaction of amount {amount} and fee {fee} is unusual.\n"
             f"Pass in --override if you are sure you mean to do this."
         )
         return
-
     summaries_response = await wallet_client.get_wallets()
-    final_amount: Optional[uint64] = None
     final_fee = uint64(int(fee * units["chia"]))
     for summary in summaries_response:
         if int(wallet_id) == int(summary["id"]):
             typ: WalletType = WalletType(int(summary["type"]))
             if typ == WalletType.STANDARD_WALLET:
-                final_amount = uint64(int(amount * units["chia"]))
                 print("Submitting transaction...")
                 res = await wallet_client.send_transaction_multi(wallet_id, additions, None , final_fee)
                 break
             else:
                 print("Only standard wallet supported for multi sends")
                 return
-    if final_amount is None:
-        print(f"Wallet id: {wallet_id} not found.")
-        return
     tx_id = res.name
     start = time.time()
     while time.time() - start < 10:
@@ -540,4 +527,3 @@ async def execute_with_wallet(
             print(f"Exception from 'wallet' {e}")
     wallet_client.close()
     await wallet_client.await_closed()
-
