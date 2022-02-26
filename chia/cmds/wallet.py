@@ -138,7 +138,7 @@ def send_cmd(
     show_default=True,
     required=True,
 )
-@click.option("-t", "--address", help="Address to send the XCH", type=str, required=True)
+@click.option("-t", "--addresses", help="Addresses to send the XCH seperated by comma", type=str, required=True)
 @click.option(
     "-o", "--override", help="Submits transaction without checking for unusual values", is_flag=True, default=False
 )
