@@ -148,11 +148,11 @@ def send_multi_cmd(
     id: int,
     amount: str,
     fee: str,
-    address: [str],
+    addresses: [str],
     override: bool,
 ) -> None:
-    addresses = address.replace(" ","").split(",")
-    extra_params = {"id": id, "amount": amount, "fee": fee, "address": addresses, "override": override}
+    all_addresses = address.replace(" ","").split(",")
+    extra_params = {"id": id, "amount": amount, "fee": fee, "address": all_addresses, "override": override}
     import asyncio
     from .wallet_funcs import execute_with_wallet, send_multi
 
